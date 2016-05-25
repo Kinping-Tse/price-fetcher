@@ -1,3 +1,5 @@
+// Author: XJP09_HK <jianping_xie@aliyun.com>
+
 package main
 
 import (
@@ -168,10 +170,8 @@ func handleTask(t Task) {
 		if oldPrice <= 0 {
 			oldPrice = 100000000
 		}
-		logInfo(price, oldPrice)
 		if price < oldPrice {
 			err = ioutil.WriteFile(priceFile, []byte(f2a(price)), 0644)
-			logWarning(err)
 			if err != nil {
 				logErr(err, t)
 			}
