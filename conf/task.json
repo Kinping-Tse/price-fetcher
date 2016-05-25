@@ -1,0 +1,11 @@
+[
+    {
+        "name": "test",
+        "description": "测试用",
+        "url": "http://xjp.iyezhi.com/test/price-fetcher.html",
+        "regexp": "<span>([\\d\\.]+)</span>",
+        "period": 60,
+        "email": ["alucard5867@163.com"],
+        "mobile": []
+    }
+]
