@@ -1,11 +1,15 @@
 [
     {
         "name": "test",
-        "description": "测试用",
+        "description": "测试用例",
         "url": "http://xjp.iyezhi.com/test/price-fetcher.html",
         "regexp": "<span>([\\d\\.]+)</span>",
         "period": 60,
-        "email": ["alucard5867@163.com"],
+        "email": {
+            "recipients": ["alucard5867@163.com"],
+            "subject": "{name} 价格更新啦~",
+            "content": "你预订的商品 {url} 最新价格为 {price} 元"
+        },
         "mobile": []
     }
 ]

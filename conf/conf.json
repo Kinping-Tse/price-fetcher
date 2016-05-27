@@ -1,0 +1,8 @@
+{
+    "smtp": {
+        "server":   "smtp.server.com",
+        "port":     25,
+        "user":     "user@mail.server.com",
+        "password": "password"
+    }
+}

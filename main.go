@@ -22,7 +22,7 @@ type Task struct {
 	Url         string
 	Regexp      string
 	Period      int64
-	Email       []string
+	Email       EmailConfig
 	Mobile      []string
 }
 
@@ -33,12 +33,17 @@ type SmtpConfig struct {
 	Password string
 }
 
-var smtpConfig = SmtpConfig{
-	Server:   "smtp.server.com",
-	Port:     25,
-	User:     "user@mail.server.com",
-	Password: "password",
+type EmailConfig struct {
+	Recipients []string
+	Subject    string
+	Content    string
 }
+
+type Config struct {
+	Smtp SmtpConfig
+}
+
+var config Config
 
 func checkErr(err error) {
 	if err != nil {
@@ -52,6 +57,7 @@ func logHelper(level string, v ...interface{}) {
 	copy(newValue[1:], v)
 	log.Println(newValue...)
 }
+
 func logInfo(v ...interface{}) {
 	logHelper("[INFO]", v...)
 }
@@ -82,26 +88,32 @@ func f2a(f float64) string {
 	return strconv.FormatFloat(f, 'f', 2, 64)
 }
 
+func i2a(i int64) string {
+	return strconv.FormatInt(i, 10)
+}
+
 func sendMail(price float64, t Task) {
-	if len(t.Email) <= 0 {
+	if len(t.Email.Recipients) <= 0 {
 		return
 	}
 
+	r := strings.NewReplacer("{name}", t.Name, "{url}", t.Url, "{price}", f2a(price))
+	subject := r.Replace(t.Email.Subject)
+	content := r.Replace(t.Email.Content)
+
+	smtpConfig := config.Smtp
 	auth := smtp.PlainAuth("", smtpConfig.User,
 		smtpConfig.Password, smtpConfig.Server)
+	msg := []byte("To: " + strings.Join(t.Email.Recipients, ",") + "\r\n" +
+		"Subject: " + subject + "\r\n\r\n" + content + "\r\n")
 
-	to := t.Email
-	msg := []byte("To: " + strings.Join(t.Email, ",") + "\r\n" +
-		"Subject: 预订价格更新啦~\r\n" +
-		"\r\n" +
-		"你预订的商品地址 " + t.Url + " 的最新价格为 " + f2a(price) + " 元\r\n")
-	err := smtp.SendMail(smtpConfig.Server+":"+string(smtpConfig.Port),
-		auth, smtpConfig.User, to, msg)
+	err := smtp.SendMail(smtpConfig.Server+":"+i2a(smtpConfig.Port),
+		auth, smtpConfig.User, t.Email.Recipients, msg)
 	if err != nil {
 		logWarning("send mail error, ", err, t)
 		return
 	}
-	logInfo("sendmail, ", t)
+	logInfo("send mail success, ", t)
 }
 
 func sendMsg(price float64, t Task) {
@@ -109,7 +121,6 @@ func sendMsg(price float64, t Task) {
 }
 
 func handleTask(t Task) {
-	// 检测相关配置
 	if strings.Trim(t.Name, " ") == "" {
 		logErr("name of task is empty: ", t)
 	}
@@ -127,9 +138,9 @@ func handleTask(t Task) {
 
 	logInfo("start task now: ", t)
 
-	// 依据定时配置周期执行
+	// Handle task period
 	for _ = range time.Tick(time.Duration(t.Period) * time.Minute) {
-		// 抓取 url 内容
+		// Get html content
 		res, err := http.Get(url)
 		if err != nil {
 			logWarning("fetch url error: ", t, err)
@@ -147,7 +158,7 @@ func handleTask(t Task) {
 			continue
 		}
 
-		// 匹配出价格
+		// Find the new price
 		reg := regexp.MustCompile(t.Regexp)
 		submatch := reg.FindSubmatch(content)
 		if submatch == nil {
@@ -159,7 +170,8 @@ func handleTask(t Task) {
 			logWarning("empty price: ", t)
 			continue
 		}
-		// 对比最优价格
+
+		// Compare the price
 		pricePath := "./logs/price/"
 		err = os.MkdirAll(pricePath, 0755)
 		checkErr(err)
@@ -170,13 +182,14 @@ func handleTask(t Task) {
 		if oldPrice <= 0 {
 			oldPrice = 100000000
 		}
+
+		// If we get the better price, log it and send notify
 		if price < oldPrice {
 			err = ioutil.WriteFile(priceFile, []byte(f2a(price)), 0644)
 			if err != nil {
 				logErr(err, t)
 			}
 
-			// 发送通知
 			sendMail(price, t)
 			// sendMsg(price, t)
 		}
@@ -186,7 +199,12 @@ func handleTask(t Task) {
 func main() {
 	// log.SetFlags(log.Lshortfile | log.LstdFlags)
 
-	// 获取任务配置
+	configJson, err := ioutil.ReadFile("./conf/conf.json")
+	checkErr(err)
+
+	err = json.Unmarshal(configJson, &config)
+	checkErr(err)
+
 	taskJson, err := ioutil.ReadFile("./conf/task.json")
 	checkErr(err)
 
@@ -199,9 +217,10 @@ func main() {
 		return
 	}
 
-	// 启动任务
+	// Start task
 	for _, task := range taskList {
 		go handleTask(task)
 	}
+
 	select {}
 }
